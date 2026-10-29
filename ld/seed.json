@@ -252,6 +252,6 @@
       "ios-17",
       "ios-16-and-older"
     ],
-    "note": "The six audiences are rule-based (user.region, and device.os_version semantic-version ranges). The seed importer applies only list-based segments today, so app/ld-bootstrap.js creates these over the API at startup and then repoints dark-mode's three city rules at them. The seeded flag rules use the same attributes directly, so the demo works correctly even if that step is skipped."
+    "note": "Rule-based audiences (user.region; device.os_version semver ranges). The importer applies only list-based segments, so app/ld-bootstrap.js creates them over the API at startup. The seeded flag rules target the same attributes directly, so the demo works without that step."
   }
 }
