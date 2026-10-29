@@ -1,0 +1,8 @@
+# Copy to terraform.tfvars and edit. *.tfvars is gitignored; only this example
+# is tracked. Never put an access token in here — export it instead:
+#
+#   export LAUNCHDARKLY_ACCESS_TOKEN=api-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+
+project_key     = "your-project-key"
+environment_key = "production"
+tags            = ["demo"]

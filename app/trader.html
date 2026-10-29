@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Z-Trader — Portfolio</title>
+<style>
+  :root{
+    --bg:#f5f6f8; --surface:#ffffff; --text:#12161f; --muted:#5f6878; --line:#e3e6ec;
+    --up:#0a7d43; --down:#c62828; --brand:#1d4ed8; --chip:#eef1f6;
+  }
+  html[data-theme="dark"]{
+    --bg:#0b0e14; --surface:#131824; --text:#e7eaf0; --muted:#8b94a6; --line:#232a38;
+    --up:#3ddc84; --down:#ff6b73; --brand:#5b8cff; --chip:#1b2130;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    transition:background .35s ease,color .35s ease}
+  .topbar{display:flex;align-items:center;gap:14px;padding:12px 18px;border-bottom:1px solid var(--line);
+    background:var(--surface);transition:background .35s,border-color .35s}
+  .logo{font-weight:700;letter-spacing:-.2px}
+  .logo span{color:var(--brand)}
+  .spacer{flex:1}
+  .sel{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--muted)}
+  select,button{font:inherit;color:var(--text);background:var(--chip);border:1px solid var(--line);
+    border-radius:8px;padding:6px 10px;cursor:pointer}
+  .badge{font-size:11px;font-weight:700;padding:3px 9px;border-radius:99px;background:var(--chip);color:var(--muted)}
+  .badge.on{background:var(--brand);color:#fff}
+  .wrap{max-width:720px;margin:0 auto;padding:22px 18px 40px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:16px;
+    transition:background .35s,border-color .35s}
+  .label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+  .value{font-size:32px;font-weight:700;letter-spacing:-.5px;margin-top:4px}
+  .delta{font-size:14px;font-weight:600;color:var(--up)}
+  .row{display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--line)}
+  .row:last-child{border-bottom:0}
+  .tkr{font-weight:700}
+  .nm{font-size:12px;color:var(--muted)}
+  .num{text-align:right}
+  .pos{color:var(--up);font-weight:600}
+  .neg{color:var(--down);font-weight:600}
+  .cta{background:var(--brand);color:#fff;border-color:var(--brand);font-weight:600;padding:11px 18px;width:100%;
+    border-radius:10px;margin-top:6px}
+  .crash{border-color:var(--down);background:color-mix(in srgb,var(--down) 8%,var(--surface))}
+  .crash h3{margin:0 0 6px;color:var(--down);font-size:15px}
+  .crash p{margin:0;font-size:13px;color:var(--muted)}
+  .mono{font:12px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted)}
+  .foot{font-size:11px;color:var(--muted);margin-top:18px;line-height:1.7}
+</style></head>
+<body>
+<div class="topbar">
+  <div class="logo">Z-<span>Trader</span></div>
+  <div class="spacer"></div>
+  <div class="sel">
+    <label for="cohort">Device</label>
+    <select id="cohort">
+      <option value="ios18">iPhone 16 Pro · iOS 18.2</option>
+      <option value="ios17">iPhone 14 · iOS 17.5</option>
+      <option value="ios16">iPhone SE · iOS 16.7.10</option>
+    </select>
+  </div>
+  <span class="badge" id="themebadge">light</span>
+</div>
+
+<div class="wrap">
+  <div id="screen"></div>
+  <div class="foot">
+    Real LaunchDarkly browser SDK with the observability and session-replay plugins.
+    The theme follows <span class="mono">dark-mode</span> for this device context, live.
+    Errors, logs, traces and this session are reported to LaunchDarkly Observability.
+    <div class="mono" id="diag" style="margin-top:6px"></div>
+  </div>
+</div>
+
+<script type="application/json" id="cfg">__CFG__</script>
+<script type="module">
+import * as LDClient from 'https://esm.sh/launchdarkly-js-client-sdk@3.9.5';
+// Both browser plugins are DEFAULT exports; there is no named `Observability`
+// or `SessionReplay` binding (unlike the Node package).
+import Observability, { LDObserve } from 'https://esm.sh/@launchdarkly/observability@1.1.23';
+import SessionReplay from 'https://esm.sh/@launchdarkly/session-replay@1.1.23';
+
+const CFG = JSON.parse(document.getElementById('cfg').textContent);
+const COHORTS = {
+  ios18: { os: '18.2',    model: 'iPhone 16 Pro' },
+  ios17: { os: '17.5',    model: 'iPhone 14' },
+  ios16: { os: '16.7.10', model: 'iPhone SE' },
+};
+
+const qs = new URLSearchParams(location.search);
+let cohort = qs.get('cohort') || localStorage.getItem('cohort') || 'ios18';
+if (!COHORTS[cohort]) cohort = 'ios18';
+document.getElementById('cohort').value = cohort;
+
+function deviceKey(c) {
+  let k = localStorage.getItem('devkey-' + c);
+  if (!k) { k = 'web-dev-' + c + '-' + Math.random().toString(36).slice(2, 10); localStorage.setItem('devkey-' + c, k); }
+  return k;
+}
+function userKey() {
+  let k = localStorage.getItem('userkey');
+  if (!k) { k = 'web-usr-' + Math.random().toString(36).slice(2, 10); localStorage.setItem('userkey', k); }
+  return k;
+}
+function contextFor(c) {
+  return {
+    kind: 'multi',
+    user: { key: userKey(), plan_tier: 'pro' },
+    device: {
+      key: deviceKey(c),
+      operating_system: 'iOS',
+      os_version: COHORTS[c].os,
+      model: COHORTS[c].model,
+      app_version: '5.13.0',
+    },
+  };
+}
+
+const HOLDINGS = [
+  { t: 'RELIANCE',  n: 'Reliance Industries',  q: 180, p: 1420.30, d:  1.24 },
+  { t: 'TCS',       n: 'Tata Consultancy Svcs', q:  40, p: 4152.80, d:  0.61 },
+  { t: 'HDFCBANK',  n: 'HDFC Bank',            q: 130, p: 1689.45, d: -2.08 },
+  { t: 'INFY',      n: 'Infosys',              q:  95, p: 1876.20, d:  0.42 },
+  { t: 'NIFTYBEES', n: 'Nippon Nifty 50 ETF',  q: 650, p:  282.15, d:  0.33 },
+];
+// Indian grouping (lakh/crore), e.g. 40,79,861.00
+const money = (v) => '\u20b9' + v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+function attrs(dark, extra) {
+  const c = COHORTS[cohort];
+  return Object.assign({
+    'app.cohort': cohort,
+    'app.os_version': c.os,
+    'app.device_model': c.model,
+    'app.app_version': '5.13.0',
+    'app.screen': 'portfolio',
+    'feature.flag_key': 'dark-mode',
+    'feature.dark_mode': dark,
+  }, extra || {});
+}
+
+// The rendering fault this demo is about: on the affected OS cohort, the dark
+// theme hits a real exception while building the holdings table.
+function buildHoldings(dark) {
+  if (dark && cohort === CFG.buggyCohort) {
+    const theme = null; // dark palette failed to load on this OS version
+    return HOLDINGS.map((h) => '<div class="row">' + theme.rowClass + '</div>').join('');
+  }
+  return HOLDINGS.map((h) => {
+    const val = h.q * h.p;
+    const cls = h.d >= 0 ? 'pos' : 'neg';
+    const sign = h.d >= 0 ? '+' : '';
+    return '<div class="row"><div><div class="tkr">' + h.t + '</div><div class="nm">' + h.n + '</div></div>'
+      + '<div class="num"><div>' + money(val) + '</div>'
+      + '<div class="' + cls + '">' + sign + h.d.toFixed(2) + '%</div></div></div>';
+  }).join('');
+}
+
+function render(dark) {
+  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  const badge = document.getElementById('themebadge');
+  badge.textContent = dark ? 'dark' : 'light';
+  badge.className = 'badge' + (dark ? ' on' : '');
+  const screen = document.getElementById('screen');
+  const total = HOLDINGS.reduce((a, h) => a + h.q * h.p, 0);
+
+  LDObserve.startSpan('render.portfolio', () => {
+    LDObserve.setAttributes && LDObserve.setAttributes(attrs(dark));
+    try {
+      const rows = buildHoldings(dark);
+      screen.innerHTML =
+        '<div class="card"><div class="label">Account value</div>'
+        + '<div class="value">' + money(total) + '</div>'
+        + '<div class="delta">+' + money(total * 0.0042) + ' today</div></div>'
+        + '<div class="card"><div class="label" style="margin-bottom:6px">Holdings</div>' + rows + '</div>'
+        + '<div class="card"><button class="cta" id="order">Place market order</button></div>';
+      document.getElementById('order').onclick = () => {
+        client.track('order-placed');
+        LDObserve.recordLog('order placed from portfolio screen', 'info', attrs(dark));
+        document.getElementById('order').textContent = 'Order submitted ✓';
+      };
+      LDObserve.recordLog('portfolio rendered: cohort=' + cohort + ' dark_mode=' + dark, 'info', attrs(dark));
+      setDiag('rendered ok · dark_mode=' + dark);
+    } catch (err) {
+      // Surface it the way the app would, and report it.
+      LDObserve.recordError(err, 'Portfolio screen failed to render', attrs(dark, { 'app.render_failed': true }));
+      LDObserve.recordLog('render failed: cohort=' + cohort + ' dark_mode=' + dark + ' — ' + err.message,
+        'error', attrs(dark, { 'app.render_failed': true }));
+      screen.innerHTML =
+        '<div class="card crash"><h3>Unable to load your portfolio</h3>'
+        + '<p>Something went wrong rendering this screen. Our team has been notified.</p>'
+        + '<p class="mono" style="margin-top:10px">' + err.name + ': ' + err.message + '</p></div>';
+      setDiag('RENDER FAILED · dark_mode=' + dark + ' · ' + err.message);
+    }
+  });
+}
+
+function setDiag(msg) {
+  const c = COHORTS[cohort];
+  document.getElementById('diag').textContent =
+    c.model + ' · iOS ' + c.os + ' · device=' + deviceKey(cohort) + ' · ' + msg;
+}
+
+const client = LDClient.initialize(CFG.clientSideId, contextFor(cohort), {
+  plugins: [new Observability({ serviceName: 'brokerage-trader-web' }), new SessionReplay({ privacySetting: 'none' })],
+});
+
+client.on('ready', () => render(client.variation('dark-mode', false)));
+client.on('change:dark-mode', (value) => render(value));
+
+document.getElementById('cohort').onchange = async (e) => {
+  cohort = e.target.value;
+  localStorage.setItem('cohort', cohort);
+  await client.identify(contextFor(cohort));
+  render(client.variation('dark-mode', false));
+};
+</script>
+</body></html>

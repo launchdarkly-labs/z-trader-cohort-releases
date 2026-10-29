@@ -1,0 +1,24 @@
+# Secrets — never commit. .env.example is the tracked reference.
+.env
+.env.*
+!.env.example
+
+# Dependencies
+app/node_modules/
+
+# Terraform
+launchdarkly/.terraform/
+launchdarkly/*.tfvars
+launchdarkly/*.tfstate
+launchdarkly/*.tfstate.backup
+launchdarkly/tfplan
+
+# Local snapshots from scripts/backup-demo.sh — useful on your machine,
+# noise in a shared repo.
+backups/
+
+# Editor / OS scratch
+.DS_Store
+*.bak
+*.bak[0-9]
+*.prebooth

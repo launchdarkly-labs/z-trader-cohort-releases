@@ -1,0 +1,18 @@
+{
+  "name": "brokerage-dark-mode-simulator",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Device-traffic simulator for the LaunchDarkly cohort-release demo (dark-mode on a fragmented iOS base).",
+  "main": "simulator.js",
+  "scripts": {
+    "start": "node simulator.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@launchdarkly/node-server-sdk": "^9.7.0",
+    "@launchdarkly/observability-node": "^1.3.0",
+    "dotenv": "^16.4.5"
+  }
+}
