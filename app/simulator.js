@@ -107,13 +107,17 @@ const cfg = {
   demoMode: (process.env.DEMO_MODE || 'both').toLowerCase(),
 };
 
+// Exiting here used to be right for a CLI tool. It is wrong in the depot: every
+// container in the task is essential: true, so this process exiting takes the
+// demo page down with it. Log loudly and keep running instead — the SDK returns
+// defaults and the dashboard shows the problem.
 if (!cfg.sdkKey || cfg.sdkKey.startsWith('sdk-xxxx')) {
   console.error('LD_SDK_KEY is not set. Copy .env.example to .env and add your server-side SDK key.');
-  process.exit(1);
+  console.error('Continuing without it: every flag will fall back to its default.');
 }
 if (!['both', 'one', 'optiona'].includes(cfg.demoMode)) {
-  console.error(`DEMO_MODE must be "both", "one" or "optiona" (got "${cfg.demoMode}")`);
-  process.exit(1);
+  console.error(`DEMO_MODE must be "both", "one" or "optiona" (got "${cfg.demoMode}") - using "both"`);
+  cfg.demoMode = 'both';
 }
 
 // ---------- Device catalogue ---------------------------------------------

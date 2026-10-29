@@ -41,11 +41,19 @@ const FAILURE_RATE = Number(process.env.FAILURE_RATE || 0.5);
 const SDK_KEY = process.env.LD_SDK_KEY;
 const CLIENT_SIDE_ID = process.env.LD_CLIENT_SIDE_ID;
 
-if (!SDK_KEY) { console.error('LD_SDK_KEY is not set. Fill in ../.env'); process.exit(1); }
-// `ldReady` is false until the SDK has a payload. The page shows a banner and
-// the health route still answers 200, because neither depends on LaunchDarkly.
+// Missing config must not stop the server coming up. Demo Depot's verifier
+// launches a task and polls /healthz; exiting here means it never answers and
+// the whole version fails verification. Log it, serve anyway, and let the page
+// say it is not configured.
+// false until the SDK has a payload. The page shows a banner; /healthz still
+// answers 200, because neither depends on LaunchDarkly.
 let ldReady = false;
-if (!CLIENT_SIDE_ID) { console.error('LD_CLIENT_SIDE_ID is not set. Fill in ../.env'); process.exit(1); }
+const configProblems = [];
+if (!SDK_KEY) configProblems.push('LD_SDK_KEY is not set');
+if (!CLIENT_SIDE_ID) configProblems.push('LD_CLIENT_SIDE_ID is not set');
+if (configProblems.length) {
+  console.error('Config incomplete: ' + configProblems.join('; ') + '. Serving anyway; flags will fall back to their defaults.');
+}
 
 const ONE_FLAG = 'dark-mode';
 const COHORTS = [
@@ -107,7 +115,17 @@ for (const fam of FAMILIES) {
   }));
 }
 
-const client = ld.init(SDK_KEY);
+// ld.init throws synchronously on an empty key, which would crash the process
+// at module load — before the server exists to answer /healthz. A stand-in that
+// serves defaults keeps the contract: boot, serve, and say you are unconfigured.
+const client = SDK_KEY ? ld.init(SDK_KEY) : {
+  variation: async (_key, _ctx, dflt) => dflt,
+  track: () => {},
+  flush: async () => {},
+  close: async () => {},
+  initialized: () => false,
+  waitForInitialization: async () => { throw new Error('no SDK key configured'); },
+};
 let state = [];
 
 async function refresh() {
@@ -162,7 +180,7 @@ async function main() {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       // ok:true regardless of ldReady — the container is serving, which is what
       // the health check is asking. ldReady is for humans reading the output.
-      res.end(JSON.stringify({ ok: true, ldReady, buggyCohort: cfg.buggyCohort,
+      res.end(JSON.stringify({ ok: true, ldReady, configProblems, buggyCohort: cfg.buggyCohort,
         buggyRegion: cfg.buggyRegion, pool: POOL, tiles: TILES, appPool: APP_POOL }));
       return;
     }

@@ -19,9 +19,16 @@ COPY --chown=node:node *.js *.html ./
 USER node
 EXPOSE 8765
 
-# Same route demo.yaml health-checks. No external calls, so a LaunchDarkly or
-# network blip cannot mark the task unhealthy.
-HEALTHCHECK --interval=15s --timeout=3s --start-period=10s --retries=3 \
-  CMD node -e "require('http').get('http://127.0.0.1:'+(process.env.DEMO_PORT||8765)+'/healthz',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
+# Deliberately NO HEALTHCHECK.
+#
+# Both containers run from this one image, and only `web` serves HTTP. A baked-in
+# probe is inherited by the `traffic` sidecar, which has no port of its own — and
+# the depot marks every container essential: true, so one container reported
+# unhealthy takes the whole task down and verification fails.
+#
+# The depot health-checks the ingress container through its load balancer using
+# runtime.ingress.healthCheck.path in demo.yaml, so nothing is lost. This matches
+# the reference demos: dd-hello-depot has no HEALTHCHECK, and the two-container
+# apex demo has one only on its ingress container, not on its sidecar.
 
 CMD ["node", "demo.js"]
