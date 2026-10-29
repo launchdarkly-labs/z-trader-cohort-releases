@@ -20,6 +20,7 @@
 
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 const http = require('http');
+const { bootstrap } = require('./ld-bootstrap');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -41,6 +42,9 @@ const SDK_KEY = process.env.LD_SDK_KEY;
 const CLIENT_SIDE_ID = process.env.LD_CLIENT_SIDE_ID;
 
 if (!SDK_KEY) { console.error('LD_SDK_KEY is not set. Fill in ../.env'); process.exit(1); }
+// `ldReady` is false until the SDK has a payload. The page shows a banner and
+// the health route still answers 200, because neither depends on LaunchDarkly.
+let ldReady = false;
 if (!CLIENT_SIDE_ID) { console.error('LD_CLIENT_SIDE_ID is not set. Fill in ../.env'); process.exit(1); }
 
 const ONE_FLAG = 'dark-mode';
@@ -141,16 +145,10 @@ const cfg = {
 const page = template.replace('__CFG__', JSON.stringify(cfg));
 
 async function main() {
-  try { await client.waitForInitialization({ timeout: 10 }); }
-  catch (e) { console.error('LaunchDarkly SDK failed to initialise:', e.message); process.exit(1); }
-  await refresh();
-
+  // The HTTP server comes up before the SDK does, on purpose. Demo Depot polls
+  // /healthz on a fresh task and expects 200 within seconds; waiting on
+  // LaunchDarkly first meant an SDK blip took the whole container down.
   const clients = new Set();
-  setInterval(async () => {
-    await refresh();
-    const payload = `data: ${JSON.stringify(state)}\n\n`;
-    for (const res of clients) res.write(payload);
-  }, 1000);
 
   http.createServer((req, res) => {
     if (req.url === '/events') {
@@ -162,7 +160,9 @@ async function main() {
     }
     if (req.url === '/healthz') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ ok: true, buggyCohort: cfg.buggyCohort,
+      // ok:true regardless of ldReady — the container is serving, which is what
+      // the health check is asking. ldReady is for humans reading the output.
+      res.end(JSON.stringify({ ok: true, ldReady, buggyCohort: cfg.buggyCohort,
         buggyRegion: cfg.buggyRegion, pool: POOL, tiles: TILES, appPool: APP_POOL }));
       return;
     }
@@ -171,6 +171,33 @@ async function main() {
   }).listen(PORT, () => {
     console.log(`Demo on http://localhost:${PORT}  (trader app + fleet wall; ${TILES} tiles from a ${POOL}-context pool per group; buggy region=${cfg.buggyRegion || 'none'}, buggy cohort=${cfg.buggyCohort || 'none'})`);
   });
+
+  // Create the metrics and segments the seed importer cannot (no-op locally,
+  // and no-op without a project-writer token). Deliberately not awaited: it
+  // must never delay the health route.
+  bootstrap();
+
+  // Now connect. A failure here is logged, not fatal: the SDK keeps retrying on
+  // its own and every variation() call falls back to its default until it is up.
+  try {
+    await client.waitForInitialization({ timeout: 10 });
+    ldReady = true;
+    console.log('LaunchDarkly SDK ready');
+  } catch (e) {
+    console.error('LaunchDarkly SDK not ready yet:', e.message, '- serving anyway, will keep retrying');
+  }
+  await refresh();
+
+  setInterval(async () => {
+    if (!ldReady) {
+      // Cheap readiness poll: initialized() flips once a payload arrives.
+      try { ldReady = client.initialized(); } catch (_) { /* older SDKs */ }
+      if (ldReady) console.log('LaunchDarkly SDK ready');
+    }
+    await refresh();
+    const payload = `data: ${JSON.stringify(state)}\n\n`;
+    for (const res of clients) res.write(payload);
+  }, 1000);
 
   const bye = async () => { try { await client.flush(); } catch (_) {} await client.close(); process.exit(0); };
   process.on('SIGINT', bye); process.on('SIGTERM', bye);

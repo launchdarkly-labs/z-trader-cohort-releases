@@ -1,0 +1,21 @@
+# Never let a key reach the image.
+.env
+.env.*
+!.env.example
+
+node_modules
+app/node_modules
+**/node_modules
+
+.git
+.github
+backups
+launchdarkly/.terraform
+launchdarkly/*.tfstate*
+launchdarkly/tfplan
+**/*.bak
+**/*.bak[0-9]
+**/*.prebooth
+.DS_Store
+*.pptx
+media

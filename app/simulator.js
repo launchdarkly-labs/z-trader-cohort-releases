@@ -314,6 +314,9 @@ async function runSession(client, family) {
 
 // ---------- Dashboard -----------------------------------------------------
 const RED = '\x1b[31m', GREEN = '\x1b[32m', DIM = '\x1b[2m', BOLD = '\x1b[1m', RESET = '\x1b[0m';
+// Non-TTY (container) logging cadence.
+const LOG_EVERY_MS = num(process.env.LOG_EVERY_MS, 15000);
+let lastLogAt = 0;
 function pad(v, w, right) { v = String(v); return right ? v.padStart(w) : v.padEnd(w); }
 function pct(n, d) { return d ? ((100 * n) / d).toFixed(1) + '%' : '-'; }
 
@@ -339,6 +342,22 @@ function render() {
     lines.push('-'.repeat(69));
   }
   lines.push(`${DIM}Total sessions: ${totalSessions}   ·   red row = render error % > ${cfg.errorThresholdPct}%   ·   Ctrl+C to stop (flushes events)${RESET}`);
+  if (!process.stdout.isTTY) {
+    // Container logs: a screen repaint every second is noise. One summary line
+    // every LOG_EVERY_MS, which is what the Demo Depot portal tails.
+    if (Date.now() - lastLogAt < LOG_EVERY_MS) return;
+    lastLogAt = Date.now();
+    const parts = [];
+    for (const f of active) {
+      for (const [key, meta] of Object.entries(f.groups)) {
+        const s = stats[f.id][key];
+        if (!s.sessions) continue;
+        parts.push(`${meta.label}=${pct(s.dark, s.sessions)} dark/${pct(s.errors, s.sessions)} err`);
+      }
+    }
+    console.log(`sessions=${totalSessions} ${parts.join('  ')}`);
+    return;
+  }
   process.stdout.write('\x1b[2J\x1b[H' + lines.join('\n') + '\n');
 }
 
@@ -359,8 +378,10 @@ async function main() {
   try {
     await client.waitForInitialization({ timeout: 10 });
   } catch (e) {
-    console.error('LaunchDarkly SDK failed to initialise:', e.message);
-    process.exit(1);
+    // Log and carry on. Every container in a Fargate task shares a lifecycle, so
+    // exiting here would take the web container down with it. The SDK retries on
+    // its own and variation() falls back to its default until a payload arrives.
+    console.error('LaunchDarkly SDK not ready yet:', e.message, '- generating traffic anyway, will keep retrying');
   }
 
   const intervalMs = 60000 / cfg.sessionsPerMinute;

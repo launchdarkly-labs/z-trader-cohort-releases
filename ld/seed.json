@@ -1,0 +1,107 @@
+{
+  "seedVersion": 1,
+  "environments": [
+    { "key": "production", "name": "Production", "color": "417505" }
+  ],
+  "flags": [
+    {
+      "key": "dark-mode",
+      "name": "Dark Mode",
+      "kind": "boolean",
+      "description": "Dark theme for the trading app. Released one city at a time - Delhi, then Jaipur, then Goa - with a guarded rollout on each phase so a regression rolls back that city alone. The only dark-mode flag the app asks for.",
+      "variations": [{ "value": true }, { "value": false }],
+      "defaults": { "onVariation": 0, "offVariation": 1 },
+      "clientSideAvailability": { "usingEnvironmentId": true },
+      "environments": {
+        "production": {
+          "on": true,
+          "offVariation": 1,
+          "rules": [
+            {
+              "description": "Delhi",
+              "clauses": [{ "contextKind": "user", "attribute": "region", "op": "in", "values": ["Delhi"] }],
+              "variation": 1
+            },
+            {
+              "description": "Jaipur",
+              "clauses": [{ "contextKind": "user", "attribute": "region", "op": "in", "values": ["Jaipur"] }],
+              "variation": 1
+            },
+            {
+              "description": "Goa",
+              "clauses": [{ "contextKind": "user", "attribute": "region", "op": "in", "values": ["Goa"] }],
+              "variation": 1
+            }
+          ],
+          "fallthrough": { "variation": 1 }
+        }
+      }
+    },
+    {
+      "key": "dark-mode-ios18",
+      "name": "Dark Mode (iOS 18)",
+      "kind": "boolean",
+      "description": "The alternative to one flag: a separate dark-mode flag for every OS version. This one is already shipped, which is what makes the sprawl visible.",
+      "variations": [{ "value": true }, { "value": false }],
+      "defaults": { "onVariation": 0, "offVariation": 1 },
+      "clientSideAvailability": { "usingEnvironmentId": true },
+      "environments": {
+        "production": { "on": true, "offVariation": 1, "rules": [], "fallthrough": { "variation": 0 } }
+      }
+    },
+    {
+      "key": "dark-mode-ios17",
+      "name": "Dark Mode (iOS 17)",
+      "kind": "boolean",
+      "description": "A separate dark-mode flag for iOS 17. This is the cohort that carries the rendering fault, so this is the flag the per-OS failure beat runs on.",
+      "variations": [{ "value": true }, { "value": false }],
+      "defaults": { "onVariation": 0, "offVariation": 1 },
+      "clientSideAvailability": { "usingEnvironmentId": true },
+      "environments": {
+        "production": { "on": true, "offVariation": 1, "rules": [], "fallthrough": { "variation": 1 } }
+      }
+    },
+    {
+      "key": "dark-mode-ios16",
+      "name": "Dark Mode (iOS 16)",
+      "kind": "boolean",
+      "description": "A separate dark-mode flag for iOS 16 and older. Not yet shipped.",
+      "variations": [{ "value": true }, { "value": false }],
+      "defaults": { "onVariation": 0, "offVariation": 1 },
+      "clientSideAvailability": { "usingEnvironmentId": true },
+      "environments": {
+        "production": { "on": true, "offVariation": 1, "rules": [], "fallthrough": { "variation": 1 } }
+      }
+    },
+    {
+      "key": "quote-experience",
+      "name": "Portfolio quote experience",
+      "kind": "string",
+      "description": "Three ways to deliver prices on the portfolio screen, cheapest to richest: pull-to-refresh, 5-second polling, live websocket stream. Render cost rises with richness, so the winner differs by device. Slice experiment results by os_cohort.",
+      "variations": [{ "value": "static" }, { "value": "polled" }, { "value": "live" }],
+      "defaults": { "onVariation": 0, "offVariation": 0 },
+      "clientSideAvailability": { "usingEnvironmentId": true },
+      "environments": {
+        "production": { "on": true, "offVariation": 0, "rules": [], "fallthrough": { "variation": 0 } }
+      }
+    },
+    {
+      "key": "pnl-display",
+      "name": "Day's gain: rupees or percentage",
+      "kind": "string",
+      "description": "How each holding shows its gain for the day - a percentage, or a rupee amount. +1.24% is abstract; a money amount is not. Measured on whether the trader opens the holding.",
+      "variations": [{ "value": "percent" }, { "value": "rupees" }],
+      "defaults": { "onVariation": 0, "offVariation": 0 },
+      "clientSideAvailability": { "usingEnvironmentId": true },
+      "environments": {
+        "production": { "on": true, "offVariation": 0, "rules": [], "fallthrough": { "variation": 0 } }
+      }
+    }
+  ],
+  "segments": [],
+  "createdDuringDemo": {
+    "by": "api",
+    "segments": ["region-delhi", "region-jaipur", "region-goa", "ios-18-plus", "ios-17", "ios-16-and-older"],
+    "note": "The six audiences are rule-based (user.region, and device.os_version semantic-version ranges). The seed importer applies only list-based segments today, so app/ld-bootstrap.js creates these over the API at startup and then repoints dark-mode's three city rules at them. The seeded flag rules use the same attributes directly, so the demo works correctly even if that step is skipped."
+  }
+}

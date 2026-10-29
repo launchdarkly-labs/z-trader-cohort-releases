@@ -1,0 +1,81 @@
+# yaml-language-server: $schema=https://demodepot.launchdarklydemos.com/schemas/demo.schema.json
+schemaVersion: 1
+slug: z-trader-cohort-releases
+name: Z-Trader - cohort releases
+summary: Release a mobile feature city by city, let a guarded rollout revert the one city that breaks, and reuse the same audiences for experiments.
+owners:
+  - ahiremath@launchdarkly.com
+tags: [guarded-rollouts, experimentation, observability, targeting, mobile]
+media:
+  cover: ./media/cover.png
+links: {}
+parameters:
+  - name: BUGGY_REGION
+    label: City that hits the fault
+    type: enum
+    options: [delhi, jaipur, goa]
+    default: jaipur
+  - name: BUGGY_COHORT
+    label: OS version that hits the fault
+    type: enum
+    options: [ios18, ios17, ios16]
+    default: ios17
+  - name: FAILURE_RATE
+    label: Render-error rate in the affected group when dark mode is on
+    type: string
+    default: "0.50"
+  - name: SESSIONS_PER_MINUTE
+    label: Sessions per minute, per population
+    type: string
+    default: "1200"
+  - name: FIX_APPLIED
+    label: Clear the fault (the fix-forward beat)
+    type: enum
+    options: ["false", "true"]
+    default: "false"
+  - name: DEMO_MODE
+    label: Which populations to run
+    type: enum
+    options: [both, one, optiona]
+    default: both
+runtime:
+  ingress:
+    container: web
+    port: 8765
+    healthCheck: { path: /healthz }
+  containers:
+    # The demo page: trader phone and fleet wall on one screen.
+    - name: web
+      build: { context: ./app }
+      cpu: 512
+      memory: 1024
+      env: { NODE_ENV: production, DEMO_PORT: "8765" }
+    # Traffic. Guarded rollouts and experiments need events flowing or every
+    # chart is empty, so this is a sidecar rather than something the SE starts.
+    # Same image as web; only the command differs.
+    - name: traffic
+      build: { context: ./app }
+      command: ["node", "simulator.js"]
+      cpu: 512
+      memory: 1024
+      env: { NODE_ENV: production }
+      dependsOn: [web]
+capabilities: []
+launchdarkly:
+  seed: ./ld/seed.json
+  # project-writer is needed: app/ld-bootstrap.js creates the five metrics and
+  # six rule-based segments that the seed importer cannot, and a guarded rollout
+  # is impossible without the metrics.
+  apiToken: project-writer
+access:
+  default: sso
+  allowPublic: false
+lifecycle:
+  pausable: true
+verify:
+  http:
+    - path: /healthz
+      expectStatus: 200
+    - path: /
+      expectStatus: 200
+      expectBodyContains: Z-Trader
