@@ -83,6 +83,38 @@ const OS_SEGMENTS = [
     { contextKind: 'device', attribute: 'os_version', op: 'semVerLessThan', values: ['17.0.0'], negate: false } ] },
 ];
 
+/**
+ * A fresh project has only the `user` context kind, so every metric below —
+ * all of which randomise on `device` — fails with "Randomization unit device
+ * not found in project settings", and the release policy fails with "context
+ * kind device is not enabled for experimentation".
+ *
+ * The SDK auto-creates the kind the first time it sees one, but that is a race
+ * with the container starting, and auto-created kinds are not enabled for
+ * experimentation. So declare it explicitly, first, before anything references
+ * it. This is scripts/01-context-kind.sh, which the depot path never ran.
+ */
+async function ensureDeviceContextKind() {
+  const r = await api('PUT', `/api/v2/projects/${PROJECT}/context-kinds/device`, {
+    name: 'Device',
+    description: 'The phone or tablet running the trading app. Attributes: operating_system, os_version, model, app_version.',
+    hideInTargeting: false,
+    archived: false,
+  });
+  return { name: 'context kind device', ok: ok(r), status: r.status, body: r.body };
+}
+
+/** Without this, `device` cannot be a randomization unit for metrics or rollouts. */
+async function enableDeviceForExperiments() {
+  const r = await api('PUT', `/api/v2/projects/${PROJECT}/experimentation-settings`, {
+    randomizationUnits: [
+      { randomizationUnit: 'user', default: true },
+      { randomizationUnit: 'device', default: false },
+    ],
+  });
+  return { name: 'device as randomization unit', ok: ok(r), status: r.status, body: r.body };
+}
+
 async function createMetric(m) {
   const r = await api('POST', `/api/v2/metrics/${PROJECT}`, {
     key: m.key, name: m.name, description: m.description, kind: 'custom',
@@ -92,12 +124,50 @@ async function createMetric(m) {
   return { name: `metric ${m.key}`, ok: ok(r), status: r.status, body: r.body };
 }
 
+/**
+ * Creates a segment AND its rule.
+ *
+ * POST /segments accepts key, name, description and tags, and silently ignores
+ * `rules` — the segment comes back with rulesCount 0. The rule has to go on in a
+ * second call, as an addRule semantic patch. Getting this wrong is invisible in a
+ * project where the segments already exist (every POST is a 409 and the rule path
+ * never runs), and fatal in a fresh one: the segments match nobody, so every flag
+ * rule pointing at them serves the fallthrough.
+ */
 async function createSegment(key, name, description, clauses) {
-  const r = await api('POST', `/api/v2/segments/${PROJECT}/${ENV}`, {
+  const created = await api('POST', `/api/v2/segments/${PROJECT}/${ENV}`, {
     key, name, description, tags: ['demo'],
-    rules: [{ clauses }],
   });
-  return { name: `segment ${key}`, ok: ok(r), status: r.status, body: r.body };
+  if (!ok(created)) {
+    return { name: `segment ${key}`, ok: false, status: created.status, body: created.body };
+  }
+
+  // Already there from a previous boot, and already ruled? Leave it alone.
+  const existing = await api('GET', `/api/v2/segments/${PROJECT}/${ENV}/${key}`);
+  if (existing.status === 200) {
+    try {
+      if (((JSON.parse(existing.body).rules) || []).length) {
+        return { name: `segment ${key}`, ok: true, status: 200, body: 'already has a rule' };
+      }
+    } catch (_) { /* fall through and try to add the rule */ }
+  }
+
+  const patched = await api('PATCH', `/api/v2/segments/${PROJECT}/${ENV}/${key}`, {
+    comment: 'depot bootstrap: targeting rule',
+    instructions: [{ kind: 'addRule', description: name, clauses }],
+  }, SEMANTIC_PATCH);
+  if (!ok(patched)) {
+    return { name: `segment ${key} rule`, ok: false, status: patched.status, body: patched.body };
+  }
+
+  // Trust nothing: read it back and confirm the rule is actually there.
+  const check = await api('GET', `/api/v2/segments/${PROJECT}/${ENV}/${key}`);
+  let ruleCount = 0;
+  try { ruleCount = ((JSON.parse(check.body).rules) || []).length; } catch (_) { /* reported below */ }
+  return ruleCount > 0
+    ? { name: `segment ${key}`, ok: true, status: 200, body: `${ruleCount} rule(s)` }
+    : { name: `segment ${key}`, ok: false, status: check.status,
+        body: 'created but has no targeting rule, so it matches nobody' };
 }
 
 /** Point the three city rules at the city segments now that they exist. */
@@ -172,6 +242,10 @@ async function bootstrap() {
   }
   console.log(`ld-bootstrap: setting up project ${PROJECT}/${ENV}`);
   const results = [];
+  // Order matters: the context kind has to exist and be enabled for
+  // experimentation before any metric or the release policy can reference it.
+  results.push(await ensureDeviceContextKind());
+  results.push(await enableDeviceForExperiments());
   for (const m of METRICS) results.push(await createMetric(m));
   for (const c of CITIES) {
     results.push(await createSegment(c.key, c.name, `Traders in ${c.city}. A phase of the city-sequenced dark-mode release.`,
@@ -180,7 +254,18 @@ async function bootstrap() {
   for (const s of OS_SEGMENTS) {
     results.push(await createSegment(s.key, s.name, `Devices matching ${s.name}. Backs the per-OS flags and the experiment audience.`, s.clauses));
   }
-  results.push(await useSegmentsOnDarkMode());
+  // Only repoint the flag if every city segment actually has a rule. Pointing a
+  // flag rule at an empty segment is worse than leaving it on the attribute
+  // clause: it matches nobody and the demo silently serves light mode to all.
+  const citiesOk = CITIES.every((c) => {
+    const r = results.find((x) => x.name === `segment ${c.key}`);
+    return r && r.ok;
+  });
+  if (citiesOk) {
+    results.push(await useSegmentsOnDarkMode());
+  } else {
+    console.error('ld-bootstrap: city segments are not usable, leaving dark-mode on its attribute clauses (the demo still works)');
+  }
   // Last: the metrics it references have to exist first.
   results.push(await createReleasePolicy());
 
