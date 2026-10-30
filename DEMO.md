@@ -40,10 +40,10 @@ Two shapes of that are shown side by side, each with its own guarded release:
   release is sequenced on the user's audience while rollouts bucket on the device.
 - **Experimentation** — two experiments reusing the same segments.
 
-## The story (about 15 minutes)
+## The story (about 12 minutes)
 
-Timings are cumulative. A healthy guarded phase needs about two minutes to walk
-its steps, so do not try to compress beats 2 and 3.
+Timings are cumulative. Go straight at the audience that breaks — there is no
+value in watching a healthy phase walk its steps for three minutes.
 
 1. **Open the app.** (0:00 → 1:30) Left is one device; right is a wall of real
    devices, one tile per context, grouped by audience. Everything is in light
@@ -51,52 +51,55 @@ its steps, so do not try to compress beats 2 and 3.
    `dark-mode` — for a user and their device together. It has no idea what an
    audience or a cohort is."*
 
-2. **Release to the first audience.** (1:30 → 4:30) On `dark-mode`, open the
-   **Delhi** rule → Edit → Serve → **Guarded rollout**. The metrics, steps and
-   auto-rollback are pre-filled by the project's release policy — confirm
-   `render-error` and `screen-load-ms` are listed, then start it. Delhi's tiles go
-   dark as it steps 25% → 50% → 100%. The other two audiences stay light. Say:
-   *"One audience at a time, and LaunchDarkly is watching the error rate while it
-   ramps."*
+2. **Release to one audience, and let it break.** (1:30 → 4:00) On `dark-mode`,
+   open the **Jaipur** rule → Edit → Serve → **Guarded rollout**. The metrics,
+   steps and auto-rollback are pre-filled by the project's release policy —
+   confirm `render-error` and `screen-load-ms` are listed, then start it. Set the
+   device picker to **Jaipur** and watch both halves of the screen.
 
-3. **Release to the audience that breaks.** (4:30 → 7:00) Same thing on the
-   **Jaipur** rule. Within a minute the Jaipur row turns red, the device throws a
-   real `TypeError`, and the guarded rollout reverts **that rule only**. Delhi
-   keeps the feature. **This is the aha moment** — say nothing and let them watch
-   it roll back by itself.
+   Jaipur starts at 25%, roughly 4 of 18 tiles go dark, and within a minute the
+   row turns red: the device throws a real `TypeError` and the guarded rollout
+   reverts **that rule only**. Say: *"One audience at a time, with guardrails on
+   every step. LaunchDarkly caught it at 25% of one audience, rolled that
+   audience back, and left everyone else alone. No human in the loop."*
 
-   Only Jaipur carries the fault (`BUGGY_REGION`), so Delhi is a guaranteed pass
-   and Jaipur a guaranteed fail. That is the point: the same release, the same
-   guardrails, different outcomes, and the blast radius is one audience.
+   **This is the aha moment** — stop talking and let them watch it revert.
 
-4. **Show the evidence.** (7:00 → 8:30) Monitoring → the error is grouped by
+3. **Show the blast radius.** (4:00 → 5:00) Delhi and Goa never saw the change;
+   their rules were not touched. Nothing was redeployed and nobody restarted the
+   app. Say: *"The failure was contained to one rule. Every other audience is
+   exactly where it was, and the fix did not need a release."*
+
+4. **Show the evidence.** (5:00 → 6:30) Monitoring → the error is grouped by
    exception and filterable by `feature.dark_mode`; the session replay shows the
-   broken screen as the user saw it. Say: *"The flag value is an attribute on the
-   telemetry, not something you infer from a deploy timestamp."*
+   broken screen as the user saw it; Change history has the release, the steps,
+   the regression and the rollback with timestamps. Say: *"The flag value is an
+   attribute on the telemetry, not something you infer from a deploy timestamp —
+   and compliance gets the same story you just watched."*
 
-5. **Fix forward.** (8:30 → 9:30) Set **Clear the fault** to `true` at launch, or
-   flip `FIX_APPLIED`, and re-run Jaipur. It passes.
+5. **Fix forward.** (6:30 → 7:30) Set **Clear the fault** to `true` at launch, or
+   flip `FIX_APPLIED`, and re-run Jaipur. It passes and completes to 100%.
 
-6. **The same thing, one flag per OS version.** (9:30 → 11:00) Open
+6. **The same thing, one flag per OS version.** (7:30 → 9:00) Open
    `dark-mode-ios18`, `ios17` and `ios16` side by side. iOS 18 is already
    serving. Say: *"Same outcome, built the other way. Three flags, three
    rollouts, three metric sets — and the cohort is now part of the flag key."*
 
-7. **Run the per-OS guarded release, and break it.** (11:00 → 13:30) Start a
-   guarded rollout on **`dark-mode-ios17`**. iOS 17 is the cohort carrying the
-   fault (`BUGGY_COHORT`), so the iOS 17 row turns red and that flag reverts —
-   while `dark-mode-ios18` stays shipped and `ios16` is untouched. Say: *"Per-flag
+7. **Run the per-OS guarded release, and break that too.** (9:00 → 11:00) Start a
+   guarded rollout on **`dark-mode-ios17`**. iOS 17 carries the fault
+   (`BUGGY_COHORT`), so the iOS 17 row turns red and that flag reverts — while
+   `dark-mode-ios18` stays shipped and `ios16` is untouched. Say: *"Per-flag
    releases work. You just maintain three of everything, and every new OS version
-   is a new flag rather than a new segment."*
+   is a new flag instead of a new segment."*
 
-8. **Reuse the audiences.** (13:30 → 15:00) The `quote-experience` experiment runs
+8. **Reuse the audiences.** (11:00 → 12:30) The `quote-experience` experiment runs
    on the same OS segments. Filter results by `os_cohort`: the live price stream
    wins on iOS 18, is marginal on iOS 17, and loses on iOS 16. Say: *"There is no
    single winning experience, and you only get that finding because the audience
    was already defined."*
 
-Short on time: beats 1–4 are the demo. Beats 6–7 are the comparison, and beat 8
-is a bonus.
+Short on time: beats 1–4 are the demo. Beats 6–7 are the comparison, beat 8 is a
+bonus.
 
 ## Created during the demo
 
@@ -106,7 +109,7 @@ them would leave the demo with nothing to do:
 
 | Key or pattern | Created by | When |
 | --- | --- | --- |
-| The guarded rollout on each `dark-mode` rule | Presenter, in the UI | Beats 2, 3 and 5 |
+| The guarded rollout on the `dark-mode` Jaipur rule | Presenter, in the UI | Beats 2 and 5 |
 | The guarded rollout on `dark-mode-ios17` | Presenter, in the UI | Beat 7 |
 | The `quote-experience-os` and `pnl-display-ab` experiments | Presenter, in the UI | Beat 8 (optional) |
 
@@ -152,7 +155,8 @@ steps. It is idempotent and never fatal — check the `web` container's log for
   segments, the metrics and the release policy; the traffic sidecar is already running
   when the URL goes live.
 - **Wait about 60 seconds** after the instance is ready before beat 2, so the metrics
-  have events. The fleet wall will be populated by then.
+  have events. The fleet wall will be populated by then, and a rollout started
+  before that can roll back for insufficient sample rather than a real regression.
 - **Confirm the guarded-rollout dialog is pre-filled** when you open it in beat 2. If the
   metrics are empty, the release policy did not apply — pick `render-error` (primary) and
   `screen-load-ms`, set two 1-minute steps and enable rollback on regression by hand. The
@@ -163,7 +167,7 @@ steps. It is idempotent and never fatal — check the `web` container's log for
 ## Known limitations
 
 - **Guarded rollouts and experiments are not seeded**, because they are the thing the
-  presenter demonstrates. Beats 2, 3, 7 and 8 are clicks in the LaunchDarkly UI.
+  presenter demonstrates. Beats 2, 5, 7 and 8 are clicks in the LaunchDarkly UI.
 - **Session replay only records while a browser tab is open** on the demo URL. Open the
   page at the start of the call, not when you reach beat 4.
 - **Counters on the fleet wall and the traffic log are cumulative** and never reset. If
