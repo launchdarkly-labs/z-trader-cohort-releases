@@ -36,8 +36,9 @@ Two shapes of that are shown side by side, each with its own guarded release:
   releasable and independently reversible.
 - **Observability** — errors, logs, traces and session replay from backend and
   browser, each carrying `feature.dark_mode` and the flag key.
-- **Multi-contexts** — every evaluation sends a `user` and a `device`, so the
-  release is sequenced on the user's audience while rollouts bucket on the device.
+- **Multi-contexts** — every evaluation sends a `user` and a `device`. The release is
+  sequenced on the user's audience and rollouts bucket on `user` to match; the device
+  side carries the OS attributes the per-OS segments target.
 - **Experimentation** — two experiments reusing the same segments.
 
 ## The story (about 12 minutes)

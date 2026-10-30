@@ -6,7 +6,7 @@
  * metrics there is no guarded rollout, which is the whole demo. So this runs
  * once at startup and fills the gap over the REST API:
  *
- *   1. five custom metrics, randomised on `device`
+ *   1. five custom metrics, randomised on `user`
  *   2. six rule-based segments (three cities, three OS ranges)
  *   3. repoints dark-mode's three city rules at the city segments, so the
  *      LaunchDarkly UI tells the "audiences are reusable objects" story
@@ -84,42 +84,28 @@ const OS_SEGMENTS = [
 ];
 
 /**
- * A fresh project has only the `user` context kind, so every metric below —
- * all of which randomise on `device` — fails with "Randomization unit device
- * not found in project settings", and the release policy fails with "context
- * kind device is not enabled for experimentation".
+ * Everything here randomises on `user`, not `device`.
  *
- * The SDK auto-creates the kind the first time it sees one, but that is a race
- * with the container starting, and auto-created kinds are not enabled for
- * experimentation. So declare it explicitly, first, before anything references
- * it. This is scripts/01-context-kind.sh, which the depot path never ran.
+ * `device` would be the nicer unit — a trader on two devices then counts twice —
+ * but it is not reachable from here. A fresh project has only the `user` context
+ * kind, and the depot's service token is scoped `project-writer`, which cannot
+ * createContextKind or updateExperimentationSettings. Verified on a real launch:
+ * both calls failed, so every metric failed with "Randomization unit device not
+ * found in project settings" and the release policy with "context kind device is
+ * not enabled for experimentation". The manifest can only ask for `none` or
+ * `project-writer`, so there is no higher privilege to request.
+ *
+ * `user` is also the better fit for this story: the release is sequenced by the
+ * user's audience, so bucketing the rollout by user is what the narrative claims.
+ * Targeting is unaffected — the `device` kind is auto-created by the SDK on first
+ * evaluation and the iOS segments clause on device.os_version regardless, because
+ * targeting a kind does not require it to be a randomization unit.
  */
-async function ensureDeviceContextKind() {
-  const r = await api('PUT', `/api/v2/projects/${PROJECT}/context-kinds/device`, {
-    name: 'Device',
-    description: 'The phone or tablet running the trading app. Attributes: operating_system, os_version, model, app_version.',
-    hideInTargeting: false,
-    archived: false,
-  });
-  return { name: 'context kind device', ok: ok(r), status: r.status, body: r.body };
-}
-
-/** Without this, `device` cannot be a randomization unit for metrics or rollouts. */
-async function enableDeviceForExperiments() {
-  const r = await api('PUT', `/api/v2/projects/${PROJECT}/experimentation-settings`, {
-    randomizationUnits: [
-      { randomizationUnit: 'user', default: true },
-      { randomizationUnit: 'device', default: false },
-    ],
-  });
-  return { name: 'device as randomization unit', ok: ok(r), status: r.status, body: r.body };
-}
-
 async function createMetric(m) {
   const r = await api('POST', `/api/v2/metrics/${PROJECT}`, {
     key: m.key, name: m.name, description: m.description, kind: 'custom',
     eventKey: m.eventKey, isNumeric: m.isNumeric, unit: m.unit,
-    successCriteria: m.successCriteria, randomizationUnits: ['device'], tags: ['demo'],
+    successCriteria: m.successCriteria, randomizationUnits: ['user'], tags: ['demo'],
   });
   return { name: `metric ${m.key}`, ok: ok(r), status: r.status, body: r.body };
 }
@@ -222,7 +208,7 @@ async function createReleasePolicy() {
     releaseMethod: 'guarded-release',
     scope: { environmentKeys: [ENV] },
     guardedReleaseConfig: {
-      rolloutContextKindKey: 'device',
+      rolloutContextKindKey: 'user',
       minSampleSize: 50,
       rollbackOnRegression: true,
       metricKeys: ['render-error', 'screen-load-ms'],
@@ -242,10 +228,6 @@ async function bootstrap() {
   }
   console.log(`ld-bootstrap: setting up project ${PROJECT}/${ENV}`);
   const results = [];
-  // Order matters: the context kind has to exist and be enabled for
-  // experimentation before any metric or the release policy can reference it.
-  results.push(await ensureDeviceContextKind());
-  results.push(await enableDeviceForExperiments());
   for (const m of METRICS) results.push(await createMetric(m));
   for (const c of CITIES) {
     results.push(await createSegment(c.key, c.name, `Traders in ${c.city}. A phase of the city-sequenced dark-mode release.`,

@@ -80,7 +80,10 @@ Then follow `runbook.md`. `./scripts/03-verify.sh` checks everything is in place
 
 ### Metrics
 
-All randomised on `device`.
+All randomised on `user`. `device` would count a trader on two devices twice, but a
+depot launch cannot register it as a randomization unit — the service token is scoped
+`project-writer`, which cannot change a project's experimentation settings. `user` is
+also the unit the audience-sequenced story actually claims.
 
 | Metric | Direction | Used for |
 | --- | --- | --- |

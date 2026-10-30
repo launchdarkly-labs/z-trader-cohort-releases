@@ -1,5 +1,6 @@
-# Custom metrics sent by the simulator via client.track(). Randomised on `device`,
-# matching the guarded-rollout randomization unit.
+# Custom metrics sent by the simulator via client.track(). Randomised on `device` here,
+# which a long-lived project can support. app/ld-bootstrap.js uses `user` instead,
+# because a Demo Depot launch cannot register `device` as a randomization unit.
 
 resource "launchdarkly_metric" "render_error" {
   project_key         = var.project_key
@@ -54,8 +55,8 @@ resource "launchdarkly_metric" "order_placed" {
   tags                = var.tags
 }
 
-# The pnl-display experiment's primary metric. Randomised on `device` like the
-# others, so release results and experiment results stay comparable.
+# The pnl-display experiment's primary metric. Randomised like the others so release
+# results and experiment results stay comparable.
 resource "launchdarkly_metric" "holding_tapped" {
   project_key         = var.project_key
   key                 = "holding-tapped"

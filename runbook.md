@@ -122,7 +122,7 @@ Yes for configuration, no for scoping. Two different mechanisms:
 | Scope | Shared by every phase | Per rule, so per phase |
 | Logic | Statistical regression vs baseline | Metric crosses a threshold you set |
 | Action | Pause / roll back the release | Switch variation + alert |
-| Analysis unit | The randomization unit (`device`) | **The whole environment** |
+| Analysis unit | The randomization unit (`user`) | **The whole environment** |
 
 The answer: *"You can attach a trigger to an individual phase, but a trigger
 measures its source across the entire environment — so use the guarded rollout
