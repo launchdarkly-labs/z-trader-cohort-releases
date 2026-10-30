@@ -1,64 +1,102 @@
 ## What this shows
 
-A brokerage ships one app to iPhones running three different versions of iOS, across
-cities that trade very differently. A dark theme that renders fine on the newest OS can
-break on an older one, and during market hours a broken portfolio screen is lost money.
-The usual choice is bad either way: ship to everyone and hope, or hold the release back
-for the slowest cohort. This demo releases dark mode **one city at a time**, lets a
-guarded rollout **revert the one city that breaks** while the others keep the feature,
-and then reuses the very same audiences to run two experiments — with the errors, logs,
-traces and session replay all tagged with the flag value that caused them.
+**This is the core Code Control demo.** Use it for any conversation about
+releasing to a fragmented base: a mobile device estate, audiences held as
+segments, a guarded release per audience, and automatic rollback of the one
+cohort that regresses. The app happens to be a stock trading app, but nothing in
+the story depends on that — swap "city" for region, tier, tenant or store and the
+demo is unchanged.
+
+The problem it answers: you ship one app to devices running three different OS
+versions, across audiences that behave differently. A change that renders fine on
+the newest OS can break on an older one. Ship to everyone and you break everyone;
+hold the release for the slowest cohort and nobody gets it. What is missing is
+not monitoring — the alert fires fine. It is a way to release to one audience at
+a time and have the platform take back only the audience that broke.
+
+Two shapes of that are shown side by side, each with its own guarded release:
+
+1. **One flag, audience by audience.** `dark-mode` has three rules, one per
+   audience segment. Rule order is the release sequence. The audience that
+   regresses reverts on its own; the audiences already live keep the feature.
+2. **A flag per OS version.** `dark-mode-ios18/17/16` is the same outcome built
+   the other way. iOS 18 is already shipped; running a guarded release on
+   `dark-mode-ios17` breaks and reverts while iOS 18 stays shipped — which is
+   what makes the cost of the sprawl concrete rather than asserted.
 
 ## LaunchDarkly features
 
-- **Guarded rollouts** — a release that watches `render-error` and `screen-load-ms` per
-  phase and reverts the phase that regresses, with no human in the loop.
-- **Audience-based release** — one flag, three rules, released city by city. Rule order
-  is the sequence, so a rollback touches one rule and the cities already live are untouched.
+- **Guarded rollouts** — a release that watches `render-error` and
+  `screen-load-ms` and reverts the phase that regresses, with no human in the loop.
+- **Audience-based release** — one flag, one rule per audience. Rule order is the
+  sequence, so a rollback touches one rule and leaves the rest alone.
 - **Segments as reusable audiences** — the same six segments back the release, the
   experiment audiences and the monitoring filters.
-- **Experimentation** — a device-capability A/B/n whose winner differs by device, and a
-  plain two-variation A/B any stakeholder can read.
-- **Observability** — errors, logs, traces and session replay from both the backend and
-  the browser, every one carrying `feature.dark_mode` and the flag key.
-- **Multi-contexts** — every evaluation sends a `user` and a `device` together, so the
-  release is sequenced on the trader's city while rollouts bucket on the device.
+- **Per-flag releases on a device base** — the per-OS flags, each independently
+  releasable and independently reversible.
+- **Observability** — errors, logs, traces and session replay from backend and
+  browser, each carrying `feature.dark_mode` and the flag key.
+- **Multi-contexts** — every evaluation sends a `user` and a `device`, so the
+  release is sequenced on the user's audience while rollouts bucket on the device.
+- **Experimentation** — two experiments reusing the same segments.
 
-## The story (about 10 minutes)
+## The story (about 15 minutes)
 
-1. **Open the app.** The left half is a trader's phone; the right is a wall of real
-   devices, one tile per context, grouped by city. Everything is in light mode. Say:
-   *"Every tile is a real evaluation. The app asks one question — `dark-mode` — for a
-   trader and their device together. It has no idea what a city or a cohort is."*
+Timings are cumulative. A healthy guarded phase needs about two minutes to walk
+its steps, so do not try to compress beats 2 and 3.
 
-2. **Start the release on Delhi.** On `dark-mode`, open the **Delhi** rule → Edit →
-   Serve → **Guarded rollout**. Keep the pre-filled metrics and 1-minute steps. Delhi's
-   tiles start turning dark as the rollout steps 10 → 25 → 50 → 100%. Jaipur and Goa stay
-   light. Say: *"One city at a time, and LaunchDarkly is watching the error rate while it
+1. **Open the app.** (0:00 → 1:30) Left is one device; right is a wall of real
+   devices, one tile per context, grouped by audience. Everything is in light
+   mode. Say: *"Every tile is a real evaluation. The app asks one question —
+   `dark-mode` — for a user and their device together. It has no idea what an
+   audience or a cohort is."*
+
+2. **Release to the first audience.** (1:30 → 4:30) On `dark-mode`, open the
+   **Delhi** rule → Edit → Serve → **Guarded rollout**. The metrics, steps and
+   auto-rollback are pre-filled by the project's release policy — confirm
+   `render-error` and `screen-load-ms` are listed, then start it. Delhi's tiles go
+   dark as it steps 25% → 50% → 100%. The other two audiences stay light. Say:
+   *"One audience at a time, and LaunchDarkly is watching the error rate while it
    ramps."*
 
-3. **Ship Jaipur, and let it fail.** Same thing on the **Jaipur** rule. Within a minute
-   the Jaipur row turns red, the phone throws a real `TypeError`, and the guarded rollout
-   reverts **that rule only**. Delhi keeps dark mode. **This is the aha moment** — say
-   nothing for a few seconds and let them watch it roll back by itself.
+3. **Release to the audience that breaks.** (4:30 → 7:00) Same thing on the
+   **Jaipur** rule. Within a minute the Jaipur row turns red, the device throws a
+   real `TypeError`, and the guarded rollout reverts **that rule only**. Delhi
+   keeps the feature. **This is the aha moment** — say nothing and let them watch
+   it roll back by itself.
 
-4. **Show the evidence.** Monitoring → the error is grouped by exception and filterable
-   by `feature.dark_mode`; the session replay shows the broken screen as the trader saw
-   it. Say: *"The flag value is an attribute on the telemetry, not something you infer
-   from a deploy timestamp."*
+   Only Jaipur carries the fault (`BUGGY_REGION`), so Delhi is a guaranteed pass
+   and Jaipur a guaranteed fail. That is the point: the same release, the same
+   guardrails, different outcomes, and the blast radius is one audience.
 
-5. **Fix forward.** Relaunch with **Clear the fault** set to `true`, or flip
-   `FIX_APPLIED`, and re-run Jaipur. It passes.
+4. **Show the evidence.** (7:00 → 8:30) Monitoring → the error is grouped by
+   exception and filterable by `feature.dark_mode`; the session replay shows the
+   broken screen as the user saw it. Say: *"The flag value is an attribute on the
+   telemetry, not something you infer from a deploy timestamp."*
 
-6. **The alternative, honestly.** Open `dark-mode-ios18/17/16` side by side. Three flags,
-   three rollouts, three metric sets. Say: *"This also works. It is just three times the
-   work, every time the device matrix changes."*
+5. **Fix forward.** (8:30 → 9:30) Set **Clear the fault** to `true` at launch, or
+   flip `FIX_APPLIED`, and re-run Jaipur. It passes.
 
-7. **Reuse the audiences.** The `quote-experience` experiment runs on the same OS
-   segments. Filter the results by `os_cohort`: the live price stream wins clearly on
-   iOS 18, is marginal on iOS 17, and loses even to pull-to-refresh on iOS 16. Say:
-   *"There is no single winning experience. That is the finding, and you only get it
-   because the audience was already defined."*
+6. **The same thing, one flag per OS version.** (9:30 → 11:00) Open
+   `dark-mode-ios18`, `ios17` and `ios16` side by side. iOS 18 is already
+   serving. Say: *"Same outcome, built the other way. Three flags, three
+   rollouts, three metric sets — and the cohort is now part of the flag key."*
+
+7. **Run the per-OS guarded release, and break it.** (11:00 → 13:30) Start a
+   guarded rollout on **`dark-mode-ios17`**. iOS 17 is the cohort carrying the
+   fault (`BUGGY_COHORT`), so the iOS 17 row turns red and that flag reverts —
+   while `dark-mode-ios18` stays shipped and `ios16` is untouched. Say: *"Per-flag
+   releases work. You just maintain three of everything, and every new OS version
+   is a new flag rather than a new segment."*
+
+8. **Reuse the audiences.** (13:30 → 15:00) The `quote-experience` experiment runs
+   on the same OS segments. Filter results by `os_cohort`: the live price stream
+   wins on iOS 18, is marginal on iOS 17, and loses on iOS 16. Say: *"There is no
+   single winning experience, and you only get that finding because the audience
+   was already defined."*
+
+Short on time: beats 1–4 are the demo. Beats 6–7 are the comparison, and beat 8
+is a bonus.
 
 ## Created during the demo
 
@@ -69,13 +107,17 @@ them would leave the demo with nothing to do:
 | Key or pattern | Created by | When |
 | --- | --- | --- |
 | The guarded rollout on each `dark-mode` rule | Presenter, in the UI | Beats 2, 3 and 5 |
-| The `quote-experience-os` and `pnl-display-ab` experiments | Presenter, in the UI | Beat 7 (optional) |
+| The guarded rollout on `dark-mode-ios17` | Presenter, in the UI | Beat 7 |
+| The `quote-experience-os` and `pnl-display-ab` experiments | Presenter, in the UI | Beat 8 (optional) |
 
-The six **segments** and five **metrics** are not in `ld/seed.json` either, but for a
-different reason: the seed importer applies only list-based segments today and does not
-create metrics at all. `app/ld-bootstrap.js` creates them over the API at startup, using
-the `project-writer` token, and then repoints `dark-mode`'s three city rules at the city
-segments. It is idempotent and never fatal.
+The six **segments**, five **metrics** and the **release policy** are not in
+`ld/seed.json` either, but for a different reason: the seed importer applies only
+list-based segments, and creates neither metrics nor policies. `app/ld-bootstrap.js`
+creates all of them over the API at startup with the `project-writer` token, repoints
+`dark-mode`'s three audience rules at the segments, and pre-fills every guarded release
+in the project with `render-error`, `screen-load-ms`, auto-rollback and two 1-minute
+steps. It is idempotent and never fatal — check the `web` container's log for
+`ld-bootstrap: 13/13 steps ok`.
 
 ## Launch parameters
 
@@ -107,16 +149,21 @@ segments. It is idempotent and never fatal.
 ## Setup the SE does
 
 - **Nothing for the core story.** The seed creates the flags; the bootstrap creates the
-  segments and metrics; the traffic sidecar is already running when the URL goes live.
+  segments, the metrics and the release policy; the traffic sidecar is already running
+  when the URL goes live.
 - **Wait about 60 seconds** after the instance is ready before beat 2, so the metrics
   have events. The fleet wall will be populated by then.
-- **The two experiments in beat 7 are optional** and must be created in the UI; the flags
-  and metrics they need are already there. Skip beat 7 if you are short of time.
+- **Confirm the guarded-rollout dialog is pre-filled** when you open it in beat 2. If the
+  metrics are empty, the release policy did not apply — pick `render-error` (primary) and
+  `screen-load-ms`, set two 1-minute steps and enable rollback on regression by hand. The
+  demo is unaffected otherwise.
+- **The two experiments in beat 8 are optional** and must be created in the UI; the flags
+  and metrics they need already exist.
 
 ## Known limitations
 
 - **Guarded rollouts and experiments are not seeded**, because they are the thing the
-  presenter demonstrates. Beats 2, 3 and 7 are clicks in the LaunchDarkly UI.
+  presenter demonstrates. Beats 2, 3, 7 and 8 are clicks in the LaunchDarkly UI.
 - **Session replay only records while a browser tab is open** on the demo URL. Open the
   page at the start of the call, not when you reach beat 4.
 - **Counters on the fleet wall and the traffic log are cumulative** and never reset. If

@@ -26,10 +26,12 @@ const ENV = process.env.LD_ENV_KEY || process.env.LD_ENVIRONMENT_KEY || 'product
 
 const SEMANTIC_PATCH = 'application/json; domain-model=launchdarkly.semanticpatch';
 
-function api(method, path, body, contentType) {
+function api(method, path, body, contentType, extraHeaders) {
   const url = new URL(API + path);
   const payload = body ? JSON.stringify(body) : null;
-  const headers = { Authorization: TOKEN, 'Content-Type': contentType || 'application/json' };
+  const headers = Object.assign(
+    { Authorization: TOKEN, 'Content-Type': contentType || 'application/json' },
+    extraHeaders || {});
   if (payload) headers['Content-Length'] = Buffer.byteLength(payload);
   return new Promise((resolve) => {
     const req = https.request(url, { method, headers }, (res) => {
@@ -128,6 +130,41 @@ async function useSegmentsOnDarkMode() {
   return { name: 'dark-mode rules', ok: ok(r), status: r.status, body: r.body };
 }
 
+/**
+ * Pre-fills every guarded release in this project with the demo's settings, so
+ * the SE picks "Guarded rollout" and the metrics, steps and rollback are already
+ * right. Without it they have to select render-error and screen-load-ms by hand,
+ * mid-call, which is exactly the fumble the runbook used to walk them into.
+ *
+ * Scoped to the environment, not to a flag tag: the seed schema has no `tags`
+ * field for flags, so a flagTagKeys scope would match nothing. Each launch gets
+ * its own throwaway project, so an environment-wide policy is safe here.
+ *
+ * Two stages, not four. 100% is implicit when the phase ends, so 25 -> 50 ->
+ * done completes a healthy phase in about two minutes. A regressing phase trips
+ * on the first stage either way.
+ */
+async function createReleasePolicy() {
+  const r = await api('POST', `/api/v2/projects/${PROJECT}/release-policies`, {
+    key: 'demo-guarded-1min',
+    name: 'Demo: guarded, 1-minute steps',
+    description: 'Cohort-release demo pacing. Short steps so a healthy phase completes inside the demo.',
+    releaseMethod: 'guarded-release',
+    scope: { environmentKeys: [ENV] },
+    guardedReleaseConfig: {
+      rolloutContextKindKey: 'device',
+      minSampleSize: 50,
+      rollbackOnRegression: true,
+      metricKeys: ['render-error', 'screen-load-ms'],
+      stages: [
+        { allocation: 25000, durationMillis: 60000 },
+        { allocation: 50000, durationMillis: 60000 },
+      ],
+    },
+  }, undefined, { 'LD-API-Version': 'beta' });
+  return { name: 'release policy', ok: ok(r), status: r.status, body: r.body };
+}
+
 async function bootstrap() {
   if (!TOKEN || !PROJECT) {
     console.log('ld-bootstrap: no LD_API_TOKEN/LD_PROJECT_KEY, skipping (expected when running locally)');
@@ -144,6 +181,8 @@ async function bootstrap() {
     results.push(await createSegment(s.key, s.name, `Devices matching ${s.name}. Backs the per-OS flags and the experiment audience.`, s.clauses));
   }
   results.push(await useSegmentsOnDarkMode());
+  // Last: the metrics it references have to exist first.
+  results.push(await createReleasePolicy());
 
   const failed = results.filter((r) => !r.ok);
   console.log(`ld-bootstrap: ${results.length - failed.length}/${results.length} steps ok`);
@@ -151,7 +190,7 @@ async function bootstrap() {
     console.error(`ld-bootstrap: ${f.name} failed (${f.status}) ${String(f.body).slice(0, 160)}`);
   }
   if (failed.length) {
-    console.error('ld-bootstrap: the demo still runs - the seeded flag rules target the same attributes directly. Guarded rollouts need the metrics above, so create any that failed by hand.');
+    console.error('ld-bootstrap: the demo still runs - the seeded flag rules target the same attributes directly. If the metrics or the release policy failed, pick render-error and screen-load-ms by hand when starting the guarded rollout.');
   }
 }
 

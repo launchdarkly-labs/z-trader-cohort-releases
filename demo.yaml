@@ -1,11 +1,11 @@
 # yaml-language-server: $schema=https://demodepot.launchdarklydemos.com/schemas/demo.schema.json
 schemaVersion: 1
 slug: z-trader-cohort-releases
-name: Z-Trader - cohort releases
-summary: Release a mobile feature city by city, let a guarded rollout revert the one city that breaks, and reuse the same audiences for experiments.
+name: "Z-Trader: cohort releases, guarded"
+summary: Core Code Control demo. Release to one audience at a time on a mobile base; the cohort that regresses rolls itself back.
 owners:
   - ahiremath@launchdarkly.com
-tags: [guarded-rollouts, experimentation, observability, targeting, mobile]
+tags: [feature-management, guarded-rollouts, progressive-rollouts, targeting, segments, mobile, observability, experimentation]
 media:
   cover: ./media/cover.png
 links: {}

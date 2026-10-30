@@ -74,7 +74,7 @@ Useful fields — these are the real indexed ones: `app.region`, `app.cohort`,
 | --- | --- | --- |
 | 6 | "You could do a flag per OS version instead. Each carries its own rollout and they can run in parallel — that's the one thing this genuinely buys you, because LaunchDarkly allows only one guarded rollout per flag. The costs: sprawl, and the version name ends up hard-coded into the flag name, so the app has to know which one to ask for." | Header filter → **A flag per OS**. The app heading changes to *asking LaunchDarkly for dark-mode-ios17*, and each column names its own flag |
 | 7 | "Same fault, same story, three times the surface area." | On `dark-mode-ios17`: **Edit → Serve → Guarded rollout** → the iOS 17 phone breaks and rolls back |
-| 8 | "The cohorts you built to protect a release are the ones you use to optimise one. Revenue here is per executed order, so we tested removing a tap from the order path — against a mis-trade guardrail." | Experiments → **One-tap order vs two-step confirm** → Results. Slice by `os_cohort` |
+| 8 | "The cohorts you built to protect a release are the ones you use to optimise one. Richer price delivery costs render time, so the winner should differ by device — and it does." | Experiments → **Which quote experience wins, per OS** → Results. Slice by `os_cohort` |
 
 The experiment's intended conclusion: one-tap lifts order completion everywhere
 (+2pp iOS 18, +3pp iOS 17, +5pp iOS 16) but cancellations climb 0.5% → 1.0% /
