@@ -27,7 +27,9 @@ if not TOKEN or TOKEN.startswith("REPLACE_WITH") or "00000000-0000" in TOKEN:
 # The Option A flags stay on OS cohorts, with iOS 18 pre-shipped so the mobile
 # error beat on iOS 17 has a healthy cohort to contrast against.
 BASELINE = {
-    "dark-mode":       {"region-delhi": False, "region-jaipur": False, "region-goa": False},
+    # Delhi is ALREADY SHIPPED at baseline: the demo opens with one audience live,
+    # so a Jaipur rollback visibly takes an audience and not the feature.
+    "dark-mode":       {"region-delhi": True, "region-jaipur": False, "region-goa": False},
     "dark-mode-ios18": {"ios-18-plus": True},
     "dark-mode-ios17": {"ios-17": False},
     "dark-mode-ios16": {"ios-16-and-older": False},

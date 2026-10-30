@@ -46,10 +46,11 @@ Timings are cumulative. Go straight at the audience that breaks — there is no
 value in watching a healthy phase walk its steps for three minutes.
 
 1. **Open the app.** (0:00 → 1:30) Left is one device; right is a wall of real
-   devices, one tile per context, grouped by audience. Everything is in light
-   mode. Say: *"Every tile is a real evaluation. The app asks one question —
-   `dark-mode` — for a user and their device together. It has no idea what an
-   audience or a cohort is."*
+   devices, one tile per context, grouped by audience. **Delhi is already dark —
+   that audience shipped last week.** Jaipur and Goa are still light. Say: *"Every
+   tile is a real evaluation. The app asks one question — `dark-mode` — for a user
+   and their device together. It has no idea what an audience or a cohort is. One
+   audience already has this feature; today we are releasing it to the next one."*
 
 2. **Release to one audience, and let it break.** (1:30 → 4:00) On `dark-mode`,
    open the **Jaipur** rule → Edit → Serve → **Guarded rollout**. The metrics,
@@ -65,10 +66,13 @@ value in watching a healthy phase walk its steps for three minutes.
 
    **This is the aha moment** — stop talking and let them watch it revert.
 
-3. **Show the blast radius.** (4:00 → 5:00) Delhi and Goa never saw the change;
-   their rules were not touched. Nothing was redeployed and nobody restarted the
-   app. Say: *"The failure was contained to one rule. Every other audience is
-   exactly where it was, and the fix did not need a release."*
+3. **Show the blast radius.** (4:00 → 5:00) Point at Delhi, still dark. Say:
+   *"Delhi still has it. The rollback took one audience, not the feature. The
+   audience that was already live never flinched, Goa was never exposed, nothing
+   was redeployed, and nobody restarted the app."*
+
+   This is the line that separates a guarded release from a kill switch: a kill
+   switch would have turned dark mode off for Delhi too.
 
 4. **Show the evidence.** (5:00 → 6:30) Monitoring → the error is grouped by
    exception and filterable by `feature.dark_mode`; the session replay shows the
@@ -135,10 +139,12 @@ steps. It is idempotent and never fatal — check the `web` container's log for
 
 ## Why the seeded rules look the way they do
 
-- **`dark-mode` starts ON with all three city rules serving `false`.** The flag has to be
-  on for a guarded rollout to be startable, and every city has to start in light mode or
-  there is no release to show. The rules exist up front because rule *order* is the
-  release sequence.
+- **`dark-mode` starts ON with Delhi serving `true`, Jaipur and Goa `false`.** The flag
+  has to be on for a guarded rollout to be startable. Delhi is seeded as *already
+  shipped* so the demo opens mid-sequence: when Jaipur reverts, the audience that was
+  already live visibly keeps the feature, which is the isolation argument. Jaipur and Goa
+  start light or there is no release to run. The rules exist up front because rule
+  *order* is the release sequence.
 - **The seeded rules clause on `user.region` directly** rather than on a segment. The
   seed importer does not apply rule-based segments, so a `segmentMatch` rule would import
   against a segment that does not exist. The bootstrap upgrades them to `segmentMatch`
