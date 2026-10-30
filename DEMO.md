@@ -157,6 +157,11 @@ steps. It is idempotent and never fatal — check the `web` container's log for
 
 ## Setup the SE does
 
+- **Your LaunchDarkly API token in Demo Depot Settings must have the Admin role.**
+  This demo sets `apiToken: project-writer`, so the depot mints a service token for
+  the container at launch. A Writer-role token is denied `createAccessToken` and the
+  launch fails before the container starts, with a 403 on `POST /api/v2/tokens`. A
+  Writer token is enough for every other part of the demo, so this is easy to miss.
 - **Nothing for the core story.** The seed creates the flags; the bootstrap creates the
   segments, the metrics and the release policy; the traffic sidecar is already running
   when the URL goes live.
