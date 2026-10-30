@@ -135,9 +135,9 @@
 
 <script type="application/json" id="cfg">__CFG__</script>
 <script type="module">
-import * as LDClient from 'https://esm.sh/launchdarkly-js-client-sdk@3.9.5';
-import Observability, { LDObserve } from 'https://esm.sh/@launchdarkly/observability@1.1.23';
-import SessionReplay from 'https://esm.sh/@launchdarkly/session-replay@1.1.23';
+import * as LDClient from '/vendor/ld-client.js';
+import Observability, { LDObserve } from '/vendor/ld-observability.js';
+import SessionReplay from '/vendor/ld-session-replay.js';
 
 const CFG = JSON.parse(document.getElementById('cfg').textContent);
 // The app's identity depends on which flag shape is on show: a trader in a city

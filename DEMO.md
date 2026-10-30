@@ -180,6 +180,11 @@ steps. It is idempotent and never fatal — check the `web` container's log for
 
 - **Guarded rollouts and experiments are not seeded**, because they are the thing the
   presenter demonstrates. Beats 2, 5, 7 and 8 are clicks in the LaunchDarkly UI.
+- **The browser SDKs are vendored, not fetched from a CDN.** `app/vendor/` holds the
+  three bundles the page imports and the app serves them itself. This is deliberate:
+  esm.sh returned HTTP 500 for exactly these packages on 2026-10-30 and the page
+  rendered an empty shell, which cannot be fixed mid-call. `scripts/vendor-sdks.sh`
+  refreshes them.
 - **Session replay only records while a browser tab is open** on the demo URL. Open the
   page at the start of the call, not when you reach beat 4.
 - **Counters on the fleet wall and the traffic log are cumulative** and never reset. If

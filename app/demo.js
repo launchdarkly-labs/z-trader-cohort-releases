@@ -176,6 +176,22 @@ async function main() {
       req.on('close', () => clients.delete(res));
       return;
     }
+    // The browser SDK bundles, served from the app rather than a CDN. See
+    // app/vendor/README.md: when esm.sh started 500ing on these packages the
+    // page rendered an empty shell, and there is no fixing that mid-demo.
+    if (req.url.startsWith('/vendor/')) {
+      const name = path.basename(req.url);              // no traversal
+      const file = path.join(__dirname, 'vendor', name);
+      if (!/^[a-z0-9.-]+\.js$/i.test(name) || !fs.existsSync(file)) {
+        res.writeHead(404); res.end('not found'); return;
+      }
+      res.writeHead(200, {
+        'Content-Type': 'text/javascript; charset=utf-8',
+        'Cache-Control': 'public, max-age=3600',
+      });
+      fs.createReadStream(file).pipe(res);
+      return;
+    }
     if (req.url === '/healthz') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       // ok:true regardless of ldReady — the container is serving, which is what

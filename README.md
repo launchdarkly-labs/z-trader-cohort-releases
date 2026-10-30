@@ -44,6 +44,8 @@ rollback has to be automatic and it has to be surgical.
 | `scripts/reset-flags.sh` | Flags back to baseline; strips leftover catch-all rules |
 | `scripts/backup-demo.sh` / `restore-demo.sh` | Snapshot and restore code plus LaunchDarkly state |
 | `scripts/03-verify.sh` | Segments, flags, metrics, release policy, leftover-rule check |
+| `app/vendor/` | The browser SDK bundles, served by the app instead of fetched from a CDN at page load |
+| `scripts/vendor-sdks.sh` | Re-downloads those bundles |
 | `launchdarkly/` | Terraform describing the objects — reference only, see "Not Terraform-managed" |
 | `runbook.md` | Live steps, talk track, fallbacks, anticipated questions, cleanup |
 

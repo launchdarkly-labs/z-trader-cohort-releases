@@ -16,6 +16,9 @@ COPY --from=deps --chown=node:node /app/node_modules ./node_modules
 # image is built once at publish time and reused by every launch.
 COPY --chown=node:node package.json ./
 COPY --chown=node:node *.js *.html ./
+# The browser SDK bundles the page serves itself. Without these the page loads
+# and renders nothing, because its module script 404s.
+COPY --chown=node:node vendor ./vendor
 USER node
 EXPOSE 8765
 

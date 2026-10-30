@@ -73,11 +73,11 @@
 
 <script type="application/json" id="cfg">__CFG__</script>
 <script type="module">
-import * as LDClient from 'https://esm.sh/launchdarkly-js-client-sdk@3.9.5';
+import * as LDClient from '/vendor/ld-client.js';
 // Both browser plugins are DEFAULT exports; there is no named `Observability`
 // or `SessionReplay` binding (unlike the Node package).
-import Observability, { LDObserve } from 'https://esm.sh/@launchdarkly/observability@1.1.23';
-import SessionReplay from 'https://esm.sh/@launchdarkly/session-replay@1.1.23';
+import Observability, { LDObserve } from '/vendor/ld-observability.js';
+import SessionReplay from '/vendor/ld-session-replay.js';
 
 const CFG = JSON.parse(document.getElementById('cfg').textContent);
 const COHORTS = {
