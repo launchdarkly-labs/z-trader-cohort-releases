@@ -50,6 +50,13 @@ runtime:
       cpu: 512
       memory: 1024
       env: { NODE_ENV: production, DEMO_PORT: "8765" }
+      # A guarded rollout needs a metric to watch, and nothing else can create one:
+      # the seed importer does not do metrics, and the injected LD_API_TOKEN's inline
+      # role covers proj, env, flag, segment and aiconfig but NOT metric. So the owner
+      # sets one LaunchDarkly token here once, in the portal at /owners/<slug>, and
+      # every launch uses it to create the metrics and the release policy. SEs launching
+      # the demo do nothing.
+      secrets: [LD_SETUP_TOKEN]
     # Traffic. Guarded rollouts and experiments need events flowing or every
     # chart is empty, so this is a sidecar rather than something the SE starts.
     # Same image as web; only the command differs.

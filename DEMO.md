@@ -158,6 +158,15 @@ steps. It is idempotent and never fatal — check the `web` container's log for
 
 ## Setup the SE does
 
+- **One-time, owner only: set the `LD_SETUP_TOKEN` demo secret.** Portal →
+  `/owners/z-trader-cohort-releases` → set it to a LaunchDarkly API token that can
+  create metrics. Every launch then creates its own metrics and release policy, and
+  **anyone launching the demo does nothing at all**. Without it the demo still runs —
+  flags, segments, targeting and traffic are all fine — but there are no metrics, and
+  a guarded rollout cannot be started without one, so beats 2 and 7 would need two
+  metrics created by hand. The injected `LD_API_TOKEN` cannot do it: its inline role
+  covers `proj`, `env`, `flag`, `segment` and `aiconfig`, and `metric` is not in that
+  list.
 - **Your LaunchDarkly API token in Demo Depot Settings must have the Admin role.**
   This demo sets `apiToken: project-writer`, so the depot mints a service token for
   the container at launch. A Writer-role token is denied `createAccessToken` and the

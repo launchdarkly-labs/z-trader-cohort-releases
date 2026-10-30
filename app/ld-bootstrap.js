@@ -20,7 +20,14 @@
 const https = require('https');
 
 const API = process.env.LD_API_BASE || 'https://app.launchdarkly.com';
-const TOKEN = process.env.LD_API_TOKEN;
+// Prefer the owner's setup token when present. The injected LD_API_TOKEN can do
+// flags, segments, environments and AI Configs, but its inline role has no
+// `metric` resource, so it cannot create the metrics a guarded rollout needs.
+// LD_SETUP_TOKEN is a demo secret the owner sets once in the portal; every launch
+// gets it, and SEs launching the demo do nothing. Falls back to LD_API_TOKEN so a
+// local run, or a launch before the secret is set, still does what it can.
+const TOKEN = process.env.LD_SETUP_TOKEN || process.env.LD_API_TOKEN;
+const USING_SETUP_TOKEN = Boolean(process.env.LD_SETUP_TOKEN);
 const PROJECT = process.env.LD_PROJECT_KEY;
 const ENV = process.env.LD_ENV_KEY || process.env.LD_ENVIRONMENT_KEY || 'production';
 
@@ -226,7 +233,8 @@ async function bootstrap() {
     console.log('ld-bootstrap: no LD_API_TOKEN/LD_PROJECT_KEY, skipping (expected when running locally)');
     return;
   }
-  console.log(`ld-bootstrap: setting up project ${PROJECT}/${ENV}`);
+  console.log(`ld-bootstrap: setting up project ${PROJECT}/${ENV}`
+    + (USING_SETUP_TOKEN ? ' (owner setup token)' : ' (injected project token — metrics will be refused)'));
   const results = [];
   for (const m of METRICS) results.push(await createMetric(m));
   for (const c of CITIES) {
@@ -248,8 +256,14 @@ async function bootstrap() {
   } else {
     console.error('ld-bootstrap: city segments are not usable, leaving dark-mode on its attribute clauses (the demo still works)');
   }
-  // Last: the metrics it references have to exist first.
-  results.push(await createReleasePolicy());
+  // The release policy names metrics, so it is pointless without them.
+  const metricsOk = METRICS.every((m) => {
+    const r = results.find((x) => x.name === `metric ${m.key}`);
+    return r && r.ok;
+  });
+  if (metricsOk) {
+    results.push(await createReleasePolicy());
+  }
 
   const failed = results.filter((r) => !r.ok);
   console.log(`ld-bootstrap: ${results.length - failed.length}/${results.length} steps ok`);
@@ -257,7 +271,21 @@ async function bootstrap() {
     console.error(`ld-bootstrap: ${f.name} failed (${f.status}) ${String(f.body).slice(0, 160)}`);
   }
   if (failed.length) {
-    console.error('ld-bootstrap: the demo still runs - the seeded flag rules target the same attributes directly. If the metrics or the release policy failed, pick render-error and screen-load-ms by hand when starting the guarded rollout.');
+    if (failed.some((f) => f.name.startsWith('metric '))) {
+      console.error([
+        'ld-bootstrap: metrics could not be created, and a guarded rollout needs one to watch.',
+        '  The injected LD_API_TOKEN cannot create metrics: its inline role covers proj/<key>,',
+        '  env/*, flag/*, segment/* and aiconfig/*, and `metric` is not in that list.',
+        '  FIX ONCE, FOR EVERY LAUNCH: the demo owner sets the LD_SETUP_TOKEN demo secret in',
+        '  the portal at /owners/z-trader-cohort-releases to a LaunchDarkly API token that can',
+        '  create metrics. Nothing changes for whoever launches the demo.',
+        '  To carry on without it, create two metrics by hand in this project:',
+        '    render-error    custom, event key render-error,   lower is better',
+        '    screen-load-ms  custom, event key screen-load-ms, lower is better, unit ms',
+        '  The app is already sending both events, so they will have data within a minute.',
+      ].join('\n'));
+    }
+    console.error('ld-bootstrap: everything else is in place - the seeded flag rules target the same attributes directly, so targeting and the release sequence work regardless.');
   }
 }
 
